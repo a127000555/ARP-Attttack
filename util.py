@@ -3,6 +3,7 @@ from scapy.all import *
 from scapy.layers.inet import IP, UDP, TCP, ICMP, Ether
 from random import randint
 import threading
+import binascii
 import struct
 
 def ip_to_num(ip):
@@ -59,7 +60,7 @@ def get_ip_range(ip, scan_range = 20):
 
         return ip_range_list
 
-def get_alive_ip(interface, dst_ip_list, times = 10, verbose= True):
+def get_alive_ip_and_mac(interface, dst_ip_list, times = 10, verbose= True):
 
     # Try to bind the socket (Faster than send/sendp from scapy)
     s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW,socket.ntohs(0x0800))
@@ -109,9 +110,11 @@ def get_alive_ip(interface, dst_ip_list, times = 10, verbose= True):
         pkt = s.recvfrom(1500)[0]
         storeobj = struct.unpack("!BBHHHBBH4s4s", pkt[14:34])
         ip_src = socket.inet_ntoa(storeobj[8])
+        storeobj = struct.unpack("!6s6sH", pkt[:14])
+        mac_src = binascii.hexlify(storeobj[1])
 
-        if ip_src in dst_ip_list and ip_src not in alive_list: 
-            alive_list.append(ip_src)
+        if ip_src in dst_ip_list and (ip_src, mac_src) not in alive_list: 
+            alive_list.append((ip_src,mac_src))
 
     if verbose:
         print(f"\nresult: find {len(alive_list)} / {len(dst_ip_list)}: {alive_list}")

